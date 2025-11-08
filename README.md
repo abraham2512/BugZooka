@@ -79,7 +79,7 @@ BugZooka supports two complementary modes for monitoring Slack channels that can
    # Run with both polling AND socket mode
    make run ARGS="--product openshift --ci prow --enable-socket-mode"
    ```
-   
+
    **Socket Mode Requirements:**
    - An app-level token (`xapp-*`) must be configured as `SLACK_APP_TOKEN`
    - Socket Mode must be enabled in your Slack app settings
@@ -115,8 +115,15 @@ ANSIBLE_MODEL="YOUR_INFERENCE_MODEL"
 GENERIC_INFERENCE_URL="YOUR_INFERENCE_ENDPOINT"
 GENERIC_INFERENCE_TOKEN="YOUR_INFERENCE_TOKEN"
 GENERIC_MODEL="YOUR_INFERENCE_MODEL"
+
+// Jira MCP Server (Optional - for Jira issue correlation)
+JIRA_BASE_URL="https://issues.redhat.com"
+JIRA_TOKEN="YOUR_JIRA_API_TOKEN"
+JIRA_ALLOWED_PROJECTS="OCPBUGS,CNF"  // Comma-separated list
 ```
 **Note**: Please make sure to provide details for all the mandatory attributes and for the product that is intended to be used for testing along with fallback (i.e. GENERIC details) to handle failover use-cases.
+
+**Jira Integration**: If you want BugZooka to search for related Jira issues when analyzing failures, configure the Jira credentials and allowed projects. The `JIRA_ALLOWED_PROJECTS` env var accepts a comma-separated list of project keys (defaults to "OCPBUGS" if not set).
 
 
 ### **Prompts**

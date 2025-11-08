@@ -150,6 +150,26 @@ class JiraClient:
             return None
 
 
+def get_allowed_projects() -> List[str]:
+    """Get allowed Jira projects from environment variable.
+
+    Returns:
+        List of allowed project keys
+
+    Raises:
+        ValueError: If no valid projects are configured
+    """
+    projects_env = os.environ.get("JIRA_ALLOWED_PROJECTS", "OCPBUGS")
+    allowed = [p.strip() for p in projects_env.split(",") if p.strip()]
+
+    logger.debug(f"Allowed Jira projects: {allowed}")
+
+    if not allowed:
+        raise ValueError("JIRA_ALLOWED_PROJECTS must contain at least one project")
+
+    return allowed
+
+
 def get_jira_client() -> JiraClient:
     """Get Jira client from environment variables."""
     base_url = os.environ.get("JIRA_BASE_URL")
@@ -174,15 +194,16 @@ def search_jira_issues(
     """Search for Jira issues in a project by title or description.
 
     Args:
-        project_key: The Jira project key to search in (only OCPBUGS or CNF allowed)
+        project_key: The Jira project key to search in
+            (configured via JIRA_ALLOWED_PROJECTS env var)
         search_text: Text to search for in issue summary or description
         max_results: Maximum number of results to return (default: 10)
 
     Returns:
         JSON string containing matching issues with their details
     """
-    # Validate project key
-    allowed_projects = ["OCPBUGS", "CNF"]
+    # Validate project key against allowed projects
+    allowed_projects = get_allowed_projects()
     if project_key not in allowed_projects:
         return (
             f"Error: Only projects {allowed_projects} are allowed. Got: {project_key}"
@@ -266,7 +287,9 @@ def get_jira_issue(issue_key: str) -> str:
 
 @mcp.tool()
 def list_jira_projects() -> str:
-    """List accessible Jira projects (limited to OCPBUGS and CNF).
+    """List accessible Jira projects.
+
+    Projects are limited to those configured in JIRA_ALLOWED_PROJECTS env var.
 
     Returns:
         JSON string containing list of allowed projects
@@ -274,8 +297,8 @@ def list_jira_projects() -> str:
     try:
         client = get_jira_client()
 
-        # Define the allowed projects
-        allowed_projects = ["OCPBUGS", "CNF"]
+        # Get allowed projects from environment
+        allowed_projects = get_allowed_projects()
 
         response = requests.get(
             f"{client.base_url}/rest/api/2/project", headers=client.headers, timeout=30

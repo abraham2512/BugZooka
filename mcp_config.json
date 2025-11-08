@@ -19,7 +19,8 @@
       ],
       "env": {
         "JIRA_BASE_URL": "${JIRA_BASE_URL}",
-        "JIRA_TOKEN": "${JIRA_TOKEN}"
+        "JIRA_TOKEN": "${JIRA_TOKEN}",
+        "JIRA_ALLOWED_PROJECTS": "${JIRA_ALLOWED_PROJECTS}"
       },
       "transport": "stdio"
     }
