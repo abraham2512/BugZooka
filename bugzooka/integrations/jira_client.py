@@ -193,10 +193,14 @@ def search_jira_issues(
 ) -> str:
     """Search for Jira issues in a project by title or description.
 
+    Use this tool to find related bugs or known issues that match the error patterns.
+    Call list_jira_projects() first if you're unsure which projects are available.
+
     Args:
         project_key: The Jira project key to search in
-            (configured via JIRA_ALLOWED_PROJECTS env var)
+            (must be one of the configured allowed projects)
         search_text: Text to search for in issue summary or description
+            (e.g., "etcd degraded", "CrashLoopBackOff", component names)
         max_results: Maximum number of results to return (default: 10)
 
     Returns:
@@ -206,7 +210,9 @@ def search_jira_issues(
     allowed_projects = get_allowed_projects()
     if project_key not in allowed_projects:
         return (
-            f"Error: Only projects {allowed_projects} are allowed. Got: {project_key}"
+            f"Error: Project '{project_key}' is not in the allowed list. "
+            f"Available projects: {', '.join(allowed_projects)}. "
+            f"Please use one of these project keys."
         )
 
     try:
@@ -287,57 +293,76 @@ def get_jira_issue(issue_key: str) -> str:
 
 @mcp.tool()
 def list_jira_projects() -> str:
-    """List accessible Jira projects.
+    """List the Jira projects that are allowed/configured for searching.
 
-    Projects are limited to those configured in JIRA_ALLOWED_PROJECTS env var.
+    Use this tool first if you need to know which project keys are available
+    before calling search_jira_issues. The list is configured via the
+    JIRA_ALLOWED_PROJECTS environment variable.
 
     Returns:
-        JSON string containing list of allowed projects
+        Formatted list of allowed project keys and their details
     """
     try:
-        client = get_jira_client()
-
-        # Get allowed projects from environment
+        # Get allowed projects from environment first
         allowed_projects = get_allowed_projects()
 
-        response = requests.get(
-            f"{client.base_url}/rest/api/2/project", headers=client.headers, timeout=30
+        # Return allowed projects list as a minimum
+        base_result = (
+            f"Allowed Jira project keys for search: "
+            f"{', '.join(allowed_projects)}\n\n"
         )
-        response.raise_for_status()
 
-        projects = response.json()
-        project_list = []
+        # Try to fetch additional details from Jira API
+        try:
+            client = get_jira_client()
+            response = requests.get(
+                f"{client.base_url}/rest/api/2/project",
+                headers=client.headers,
+                timeout=30,
+            )
+            response.raise_for_status()
 
-        # Filter to only include allowed projects
-        for project in projects:
-            project_key = project.get("key")
-            if project_key in allowed_projects:
-                project_list.append(
-                    {
-                        "key": project_key,
-                        "name": project.get("name"),
-                        "id": project.get("id"),
-                    }
+            projects = response.json()
+            project_list = []
+
+            # Filter to only include allowed projects
+            for project in projects:
+                project_key = project.get("key")
+                if project_key in allowed_projects:
+                    project_list.append(
+                        {
+                            "key": project_key,
+                            "name": project.get("name"),
+                            "id": project.get("id"),
+                        }
+                    )
+
+            # Format with full details
+            if project_list:
+                formatted_result = base_result
+                formatted_result += "Project Details:\n\n"
+                for i, project in enumerate(project_list, 1):
+                    formatted_result += (
+                        f"{i}. **{project['key']}** - {project['name']}\n"
+                    )
+                    formatted_result += f"   - ID: {project['id']}\n\n"
+                return formatted_result
+            else:
+                return base_result + (
+                    "Note: Could not fetch additional project details from Jira API."
                 )
 
-        # result = {
-        #     "total_projects": len(project_list),
-        #     "allowed_projects": allowed_projects,
-        #     "projects": project_list,
-        # }
-
-        # Format the results as a readable list
-        formatted_result = f"Available Jira projects ({len(project_list)} found):\n\n"
-
-        for i, project in enumerate(project_list, 1):
-            formatted_result += f"{i}. **{project['key']}** - {project['name']}\n"
-            formatted_result += f"   - ID: {project['id']}\n\n"
-
-        return formatted_result
+        except Exception as api_error:
+            logger.warning(f"Could not fetch project details: {api_error}")
+            # Still return allowed projects list
+            return base_result + (
+                "Note: Could not fetch additional details from Jira API, "
+                "but you can use any of the allowed project keys above."
+            )
 
     except Exception as e:
         logger.error(f"Error in list_jira_projects: {e}")
-        return f"Error listing Jira projects: {str(e)}"
+        return f"Error: {str(e)}"
 
 
 if __name__ == "__main__":

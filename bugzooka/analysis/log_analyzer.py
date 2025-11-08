@@ -33,8 +33,6 @@ from bugzooka.integrations.inference import (
     InferenceAPIUnavailableError,
 )
 from bugzooka.integrations.mcp_client import (
-    mcp_client,
-    mcp_tools,
     initialize_global_resources_async,
 )
 from bugzooka.integrations.gemini_client import analyze_log_with_gemini
@@ -44,8 +42,10 @@ from bugzooka.core.utils import extract_job_details
 
 logger = logging.getLogger(__name__)
 
+
 class SingleStringInput(BaseModel):
     """Schema for tools that accept a single string argument."""
+
     query: str = Field(description="The full error summary text to analyze.")
 
 
@@ -167,17 +167,27 @@ def run_agent_analysis(error_summary, product, product_config):
             # We must use asyncio.run to execute the async code.
             try:
                 # Execute the async function using asyncio.run
-                return asyncio.run(_run_fallback_agent_analysis_async(error_summary, product, product_config))
+                return asyncio.run(
+                    _run_fallback_agent_analysis_async(
+                        error_summary, product, product_config
+                    )
+                )
             except Exception as e:
                 # This catches any unhandled exception (network, API, LangChain internal)
                 # and explicitly re-raises it with a message, preventing the silent failure.
                 # This ensures the tenacity decorator receives a proper exception.
-                logger.error("Unexpected error during async agent execution: %s", str(e), exc_info=True)
+                logger.error(
+                    "Unexpected error during async agent execution: %s",
+                    str(e),
+                    exc_info=True,
+                )
                 raise InferenceAPIUnavailableError(
                     f"Unhandled error during agent analysis: {type(e).__name__}: {str(e)}"
                 ) from e
 
-    async def _run_fallback_agent_analysis_async(error_summary, product, product_config):
+    async def _run_fallback_agent_analysis_async(
+        error_summary, product, product_config
+    ):
         """Fallback to agent-based analysis if direct Gemini call fails."""
 
         global mcp_client, mcp_tools
@@ -194,16 +204,18 @@ def run_agent_analysis(error_summary, product, product_config):
         # The 'func' is partially applied with product/product_config.
         product_tool = StructuredTool(
             name="analyze_product_log",
-            func=partial(product_log_wrapper, product=product, product_config=product_config),
+            func=partial(
+                product_log_wrapper, product=product, product_config=product_config
+            ),
             description=f"Analyze {product} logs from error summary. Input should be the error summary.",
-            args_schema=SingleStringInput
+            args_schema=SingleStringInput,
         )
 
         generic_tool = StructuredTool(
             name="analyze_generic_log",
             func=partial(generic_log_wrapper, product_config=product_config),
             description="Analyze general logs from error summary. Input should be the error summary.",
-            args_schema=SingleStringInput
+            args_schema=SingleStringInput,
         )
 
         TOOLS = [product_tool, generic_tool] + mcp_tools
@@ -218,11 +230,12 @@ def run_agent_analysis(error_summary, product, product_config):
         )
 
         query = (
-            f"Please analyze this {product} specific error"
-            f" summary: {error_summary} using the most appropriate"
-            f" tool (product-specific or generic or any other)"
-            f" and provide me potential next steps to debug"
-            f" this issue as a final answer"
+            f"Please analyze this {product} specific error summary: "
+            f"{error_summary}\n\n"
+            f"Use the most appropriate tools available to you:\n"
+            f"1. Start with product-specific or generic log analysis\n"
+            f"2. Then use search_jira_issues to find related bugs\n"
+            f"3. Provide comprehensive next steps to debug this issue"
         )
 
         response = await agent.arun(query)
